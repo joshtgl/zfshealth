@@ -1,0 +1,8 @@
+[Unit]
+Description=ZFS Health scrub daemon
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/zfshealth daemon --config /etc/zfshealth/config.toml
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure

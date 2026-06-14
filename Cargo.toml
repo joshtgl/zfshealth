@@ -1,0 +1,34 @@
+[package]
+name = "zfshealth"
+version = "0.1.0"
+edition = "2024"
+description = "Tool to manage ZFS pool scrubs"
+license = "MIT OR Apache-2.0"
+authors = [
+  "Josh <git@bnhtech.com",
+]
+
+[dependencies]
+chrono = "0.4"
+chrono-tz = "0.10"
+clap = { version = "4.6.1", features = ["derive"] }
+etcetera = "0.11.0"
+jiff = "0.2.23"
+lettre = { version = "0.11.21", default-features = false, features = ["smtp-transport", "builder", "tokio1", "tokio1-rustls", "rustls-native-certs", "aws-lc-rs"] }
+serde = { version = "1.0.228", features = ["derive"] }
+tokio = { version = "1", features = ["macros", "process", "rt-multi-thread", "signal", "sync", "time", "fs"] }
+tokio-cron-scheduler = "0.15.1"
+toml = "0.8"
+uuid = "1"
+
+[package.metadata.deb]
+assets = [
+    ["target/release/zfshealth", "/usr/bin/zfshealth", "755"],
+    ["packaging/config.toml", "/usr/share/doc/zfshealth/examples/config.toml", "644"],
+]
+maintainer-scripts = "packaging/debian"
+
+[package.metadata.deb.systemd-units]
+unit-name = "zfshealth-scrub"
+enable = true
+start = true

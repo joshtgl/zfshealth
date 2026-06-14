@@ -1,0 +1,2 @@
+[scrub.schedule]
+cron = "15 3 * * 3"

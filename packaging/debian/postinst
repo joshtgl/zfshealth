@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+
+CONFIG_DIR="/etc/zfshealth"
+CONFIG_FILE="${CONFIG_DIR}/config.toml"
+DEFAULT_CONFIG="/usr/share/doc/zfshealth/examples/config.toml"
+
+if [ ! -e "$CONFIG_FILE" ]; then
+    install -d -m 0755 "$CONFIG_DIR"
+    install -m 0644 "$DEFAULT_CONFIG" "$CONFIG_FILE"
+fi

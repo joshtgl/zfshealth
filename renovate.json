@@ -1,0 +1,49 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "labels": [
+    "dependencies"
+  ],
+  "rangeStrategy": "bump",
+  "prConcurrentLimit": 5,
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^\\.github\\/workflows\\/release\\.yml$/"
+      ],
+      "matchStrings": [
+        "uses: release-plz/action@[^\\n]+\\n\\s+with:\\n\\s+command: \\S+\\n\\s+version: (?<currentValue>\\S+)"
+      ],
+      "depNameTemplate": "release-plz",
+      "datasourceTemplate": "crate"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^\\.github\\/workflows\\/(ci|release)\\.yml$/"
+      ],
+      "matchStrings": [
+        "cargo install cargo-deb --version (?<currentValue>\\S+) --locked"
+      ],
+      "depNameTemplate": "cargo-deb",
+      "datasourceTemplate": "crate"
+    }
+  ],
+  "packageRules": [
+    {
+      "matchManagers": [
+        "cargo"
+      ],
+      "groupName": "rust dependencies"
+    },
+    {
+      "matchManagers": [
+        "github-actions"
+      ],
+      "groupName": "github actions"
+    }
+  ]
+}

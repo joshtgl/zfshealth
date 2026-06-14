@@ -1,0 +1,10 @@
+[scrub.schedule]
+cron = "15 3 * * 3"
+
+[email]
+from = "testfrom@test.com"
+to = "test@test.com"
+host = "test.host.com"
+port = 587
+username = "test"
+password = "test"
