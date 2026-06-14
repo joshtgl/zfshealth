@@ -9,3 +9,5 @@ if [ ! -e "$CONFIG_FILE" ]; then
     install -d -m 0755 "$CONFIG_DIR"
     install -m 0644 "$DEFAULT_CONFIG" "$CONFIG_FILE"
 fi
+
+#DEBHELPER#
