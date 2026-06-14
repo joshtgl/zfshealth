@@ -33,7 +33,7 @@ jobs:
         run: cargo test --locked
 
       - name: Install cargo-deb
-        run: cargo install cargo-deb --version 2.11.2 --locked
+        run: cargo install cargo-deb --version 3.0.0 --locked
 
       - name: Build release binary
         run: cargo build --release --locked
