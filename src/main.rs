@@ -3,6 +3,7 @@ mod daemon;
 mod email;
 mod error;
 mod scrub;
+mod status;
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -11,22 +12,35 @@ use crate::config::{load_config, resolve_config_path};
 use crate::daemon::run_daemon;
 use crate::error::AppError;
 use crate::scrub::execute_scrub;
+use crate::status::execute_status;
 
 #[derive(Parser, Debug)]
 #[command(name = "zfshealth")]
 #[command(about = "ZFS health monitoring with scrub scheduling")]
 struct Args {
-    #[arg(long, help = "Path to configuration file")]
+    #[arg(long, global = true, help = "Path to configuration file")]
     config: Option<PathBuf>,
 
     #[command(subcommand)]
     command: Option<CommandMode>,
 }
 
-#[derive(Subcommand, Debug, Clone, Copy)]
+#[derive(Subcommand, Debug, Clone)]
 enum CommandMode {
-    RunOnce,
+    Run(RunCommand),
     Daemon,
+}
+
+#[derive(Parser, Debug, Clone, Copy)]
+struct RunCommand {
+    #[command(subcommand)]
+    mode: RunMode,
+}
+
+#[derive(Subcommand, Debug, Clone, Copy)]
+enum RunMode {
+    Scrub,
+    Status,
 }
 
 #[tokio::main]
@@ -40,12 +54,17 @@ async fn main() {
 async fn run() -> Result<(), AppError> {
     let args = Args::parse();
     let config_path = resolve_config_path(args.config)?;
-    let command = args.command.unwrap_or(CommandMode::RunOnce);
+    let command = args.command.unwrap_or(CommandMode::Run(RunCommand {
+        mode: RunMode::Scrub,
+    }));
 
     match command {
-        CommandMode::RunOnce => {
+        CommandMode::Run(run_command) => {
             let config = load_config(config_path.as_ref()).await?;
-            execute_scrub(config.email).await
+            match run_command.mode {
+                RunMode::Scrub => execute_scrub(config.email).await,
+                RunMode::Status => execute_status(config.email).await,
+            }
         }
         CommandMode::Daemon => run_daemon(
             config_path.ok_or_else(|| {

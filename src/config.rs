@@ -1,6 +1,9 @@
 use etcetera::BaseStrategy;
+use jiff::{Span, SpanRelativeTo};
 use serde::Deserialize;
+use serde::de::{self, Deserializer};
 use std::path::PathBuf;
+use std::time::Duration;
 
 use crate::error::AppError;
 
@@ -10,10 +13,18 @@ pub struct Config {
     pub email: Option<EmailConfig>,
     #[serde(default)]
     pub scrub: ScrubConfig,
+    #[serde(default)]
+    pub status: StatusConfig,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct ScrubConfig {
+    #[serde(default)]
+    pub schedule: Option<ScheduleConfig>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct StatusConfig {
     #[serde(default)]
     pub schedule: Option<ScheduleConfig>,
 }
@@ -23,6 +34,8 @@ pub struct ScheduleConfig {
     pub cron: String,
     #[serde(default = "default_timezone")]
     pub timezone: String,
+    #[serde(default, deserialize_with = "deserialize_repeat_after")]
+    pub repeat_after: Option<Duration>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -39,13 +52,66 @@ fn default_timezone() -> String {
     "local".to_string()
 }
 
-impl Config {
-    pub fn daemon_schedule(&self) -> Result<&ScheduleConfig, AppError> {
-        self.scrub.schedule.as_ref().ok_or_else(|| {
-            AppError::ConfigFile(
-                "Missing required configuration at [scrub.schedule] for daemon mode".to_string(),
-            )
+fn deserialize_repeat_after<'de, D>(deserializer: D) -> Result<Option<Duration>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let raw = Option::<String>::deserialize(deserializer)?;
+    let Some(raw) = raw else {
+        return Ok(None);
+    };
+
+    let span = raw.parse::<Span>().map_err(|err| {
+        de::Error::custom(format!(
+            "status.schedule.repeat_after must be a valid Jiff duration: {}",
+            err
+        ))
+    })?;
+
+    let signed_duration = span
+        .to_duration(SpanRelativeTo::days_are_24_hours())
+        .map_err(|err| {
+            de::Error::custom(format!(
+                "status.schedule.repeat_after could not be converted to an elapsed duration: {}",
+                err
+            ))
+        })?;
+
+    if signed_duration.is_negative() {
+        return Err(de::Error::custom(
+            "status.schedule.repeat_after must not be negative",
+        ));
+    }
+
+    Duration::try_from(signed_duration)
+        .map(Some)
+        .map_err(|err| {
+            de::Error::custom(format!(
+                "status.schedule.repeat_after must be a non-negative elapsed duration: {}",
+                err
+            ))
         })
+}
+
+impl Default for ScheduleConfig {
+    fn default() -> Self {
+        Self {
+            cron: String::new(),
+            timezone: default_timezone(),
+            repeat_after: None,
+        }
+    }
+}
+
+impl Config {
+    pub fn validate_daemon_config(&self) -> Result<(), AppError> {
+        if self.scrub.schedule.is_some() || self.status.schedule.is_some() {
+            Ok(())
+        } else {
+            Err(AppError::ConfigFile(
+                "Daemon mode requires at least one schedule under [scrub.schedule] or [status.schedule]".to_string(),
+            ))
+        }
     }
 }
 
@@ -88,6 +154,7 @@ pub async fn load_config_from_path(config_path: &PathBuf) -> Result<Config, AppE
 #[cfg(test)]
 mod tests {
     use super::Config;
+    use std::time::Duration;
 
     #[test]
     fn parses_nested_scrub_schedule() {
@@ -99,20 +166,64 @@ mod tests {
         )
         .expect("config should parse");
 
-        let schedule = config.daemon_schedule().expect("schedule should exist");
+        let schedule = config
+            .scrub
+            .schedule
+            .as_ref()
+            .expect("schedule should exist");
         assert_eq!(schedule.cron, "15 3 * * 3");
         assert_eq!(schedule.timezone, "local");
+        assert_eq!(schedule.repeat_after, None);
     }
 
     #[test]
-    fn daemon_mode_requires_schedule() {
+    fn parses_status_repeat_after() {
+        let config: Config = toml::from_str(
+            r#"
+            [status.schedule]
+            cron = "*/15 * * * *"
+            repeat_after = "7d"
+            "#,
+        )
+        .expect("config should parse");
+
+        let schedule = config
+            .status
+            .schedule
+            .as_ref()
+            .expect("status schedule should exist");
+        assert_eq!(
+            schedule.repeat_after,
+            Some(Duration::from_secs(7 * 24 * 60 * 60))
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_repeat_after() {
+        let err = toml::from_str::<Config>(
+            r#"
+            [status.schedule]
+            cron = "*/15 * * * *"
+            repeat_after = "not-a-duration"
+            "#,
+        )
+        .expect_err("config should fail");
+
+        assert!(
+            err.to_string()
+                .contains("status.schedule.repeat_after must be a valid Jiff duration")
+        );
+    }
+
+    #[test]
+    fn daemon_mode_requires_at_least_one_schedule() {
         let config = Config::default();
         let err = config
-            .daemon_schedule()
+            .validate_daemon_config()
             .expect_err("schedule should be required");
         assert!(
             err.to_string()
-                .contains("Missing required configuration at [scrub.schedule]")
+                .contains("Daemon mode requires at least one schedule")
         );
     }
 }

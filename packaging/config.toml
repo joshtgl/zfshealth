@@ -1,2 +1,6 @@
 [scrub.schedule]
 cron = "15 3 * * 3"
+
+[status.schedule]
+cron = "*/15 * * * *"
+repeat_after = "24h"
