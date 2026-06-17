@@ -22,6 +22,7 @@ jobs:
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
         with:
           toolchain: stable
+          targets: x86_64-unknown-linux-musl
 
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
@@ -35,8 +36,32 @@ jobs:
       - name: Install cargo-deb
         run: cargo install cargo-deb --version 3.0.0 --locked
 
+      - name: Install cargo-cyclonedx
+        run: cargo install cargo-cyclonedx --version 0.5.9 --locked
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+        with:
+          version: 0.16.0
+
+      - name: Verify Zig installation
+        run: zig version
+
+      - name: Install cargo-zigbuild
+        run: cargo install cargo-zigbuild --version 0.20.1 --locked
+
       - name: Build release binary
         run: cargo build --release --locked
 
       - name: Validate Debian package build
         run: cargo deb --no-build
+
+      - name: Validate SBOM generation
+        env:
+          SBOM_BASE_NAME: zfshealth-ci.cdx
+        run: |
+          cargo cyclonedx --format json --override-filename "$SBOM_BASE_NAME"
+          test -f "$SBOM_BASE_NAME.json"
+
+      - name: Validate static musl binary build
+        run: cargo zigbuild --release --target x86_64-unknown-linux-musl
