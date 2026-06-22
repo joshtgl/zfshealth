@@ -1,5 +1,6 @@
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{AsyncSmtpTransport, AsyncTransport, Tokio1Executor};
+use secrecy::ExposeSecret;
 
 use crate::config::EmailConfig;
 use crate::error::AppError;
@@ -15,7 +16,10 @@ pub async fn send_mail(config: &EmailConfig, subject: &str, body: &str) -> Resul
         Err(e) => return Err(AppError::Smtp(e.to_string())),
     };
 
-    let credentials = Credentials::new(config.username.clone(), config.password.clone());
+    let credentials = Credentials::new(
+        config.username.clone(),
+        config.password.expose_secret().to_string(),
+    );
     let sender = build_mailer(config, credentials)?;
 
     sender.send(email).await?;

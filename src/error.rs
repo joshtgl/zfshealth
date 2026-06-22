@@ -4,6 +4,7 @@ use std::io;
 pub enum AppError {
     Io(io::Error),
     Join(tokio::task::JoinError),
+    Config(config::ConfigError),
     Toml(toml::de::Error),
     EmailParse(lettre::address::AddressError),
     Scheduler(String),
@@ -17,6 +18,7 @@ impl std::fmt::Display for AppError {
         match self {
             AppError::Io(e) => write!(f, "IO error: {}", e),
             AppError::Join(e) => write!(f, "Task join error: {}", e),
+            AppError::Config(e) => write!(f, "Configuration error: {}", e),
             AppError::Toml(e) => write!(f, "TOML parsing error: {}", e),
             AppError::EmailParse(e) => write!(f, "Email address error: {}", e),
             AppError::Scheduler(e) => write!(f, "Scheduler error: {}", e),
@@ -38,6 +40,12 @@ impl From<io::Error> for AppError {
 impl From<tokio::task::JoinError> for AppError {
     fn from(err: tokio::task::JoinError) -> Self {
         AppError::Join(err)
+    }
+}
+
+impl From<config::ConfigError> for AppError {
+    fn from(err: config::ConfigError) -> Self {
+        AppError::Config(err)
     }
 }
 

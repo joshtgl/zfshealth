@@ -11,4 +11,4 @@ to = "test@test.com"
 host = "test.host.com"
 port = 587
 username = "test"
-password = "test"
+password_file = "/etc/zfshealth/smtp-password"

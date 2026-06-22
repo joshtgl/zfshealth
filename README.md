@@ -94,7 +94,20 @@ to = "admin@example.com"
 host = "smtp.example.com"
 port = 587
 username = "smtp-user"
-password = "smtp-password"
+password_file = "/etc/zfshealth/smtp-password"
+```
+
+Inline `password = "smtp-password"` is still supported, but `password_file` is preferred so secrets can be kept out of the main configuration file.
+
+Any configuration value can be overridden with environment variables using the `ZFSHEALTH` prefix and double underscores for nested tables:
+
+```bash
+ZFSHEALTH_EMAIL__HOST=smtp.example.com
+ZFSHEALTH_EMAIL__PORT=587
+ZFSHEALTH_EMAIL__USERNAME=smtp-user
+ZFSHEALTH_EMAIL__PASSWORD_FILE=/etc/zfshealth/smtp-password
+ZFSHEALTH_EMAIL__PASSWORD=smtp-password
+ZFSHEALTH_STATUS__SCHEDULE__CRON="*/15 * * * *"
 ```
 
 The `cron` value uses standard 5-field cron syntax:
