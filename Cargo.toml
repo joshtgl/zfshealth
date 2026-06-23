@@ -31,6 +31,6 @@ assets = [
 maintainer-scripts = "packaging/debian"
 
 [package.metadata.deb.systemd-units]
-unit-name = "zfshealth-scrub"
+unit-name = "zfshealth"
 enable = true
 start = true

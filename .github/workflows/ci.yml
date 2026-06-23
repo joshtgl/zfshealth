@@ -18,6 +18,12 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install Nix
+        uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3 # v31.10.6
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
         with:
@@ -32,6 +38,9 @@ jobs:
 
       - name: Run tests
         run: cargo test --locked
+
+      - name: Run flake checks
+        run: nix flake check
 
       - name: Install cargo-deb
         run: cargo install cargo-deb --version 3.0.0 --locked

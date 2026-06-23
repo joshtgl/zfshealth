@@ -13,7 +13,13 @@ This document covers running, building, and testing `zfshealth` from source.
 Run a one-shot scrub using the example config:
 
 ```bash
-cargo run -- run-once --config examples/config.toml
+cargo run -- run scrub --config examples/config.toml
+```
+
+Run a one-shot status check:
+
+```bash
+cargo run -- run status --config examples/config.toml
 ```
 
 Run the daemon in the foreground:
@@ -47,6 +53,18 @@ cargo install cargo-deb --locked
 cargo deb
 ```
 
+Build the Nix package:
+
+```bash
+nix build .#zfshealth
+```
+
+Enter the Nix development shell:
+
+```bash
+nix develop
+```
+
 ## Test
 
 Run the test suite:
@@ -59,6 +77,12 @@ Check formatting:
 
 ```bash
 cargo fmt --check
+```
+
+Run the Nix flake checks:
+
+```bash
+nix flake check
 ```
 
 The current tests cover config parsing and scheduler validation. End-to-end scrub behavior depends on local ZFS and SMTP environment availability.

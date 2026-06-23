@@ -30,6 +30,28 @@
       ],
       "depNameTemplate": "cargo-deb",
       "datasourceTemplate": "crate"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^\\.github\\/workflows\\/(ci|release)\\.yml$/"
+      ],
+      "matchStrings": [
+        "cargo install cargo-cyclonedx --version (?<currentValue>\\S+) --locked"
+      ],
+      "depNameTemplate": "cargo-cyclonedx",
+      "datasourceTemplate": "crate"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^\\.github\\/workflows\\/(ci|release)\\.yml$/"
+      ],
+      "matchStrings": [
+        "cargo install cargo-zigbuild --version (?<currentValue>\\S+) --locked"
+      ],
+      "depNameTemplate": "cargo-zigbuild",
+      "datasourceTemplate": "crate"
     }
   ],
   "packageRules": [

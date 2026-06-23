@@ -1,5 +1,5 @@
 [Unit]
-Description=ZFS Health scrub daemon
+Description=ZFS Health daemon
 
 [Service]
 Type=simple
