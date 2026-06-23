@@ -57,7 +57,7 @@ jobs:
         run: zig version
 
       - name: Install cargo-zigbuild
-        run: cargo install cargo-zigbuild --version 0.20.1 --locked
+        run: cargo install cargo-zigbuild --version 0.23.0 --locked
 
       - name: Build release binary
         run: cargo build --release --locked
