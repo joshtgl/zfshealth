@@ -5,6 +5,12 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run artifact build and verification jobs without publishing a GitHub release"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -16,6 +22,8 @@ jobs:
     outputs:
       releases: ${{ steps.release_plz.outputs.releases }}
       releases_created: ${{ steps.release_plz.outputs.releases_created }}
+      should_build_artifacts: ${{ steps.release_mode.outputs.should_build_artifacts }}
+      should_publish_artifacts: ${{ steps.release_mode.outputs.should_publish_artifacts }}
     permissions:
       contents: write
       id-token: write
@@ -37,6 +45,7 @@ jobs:
 
       - name: Run release-plz release
         id: release_plz
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
         uses: release-plz/action@e8792575c7f2366cf6ff3ccc33ead9ace5b691c7 # v0.5.130
         with:
           command: release
@@ -44,9 +53,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Determine release mode
+        id: release_mode
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.dry_run }}" == "true" ]]; then
+            echo "should_build_artifacts=true" >> "$GITHUB_OUTPUT"
+            echo "should_publish_artifacts=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_build_artifacts=${{ steps.release_plz.outputs.releases_created }}" >> "$GITHUB_OUTPUT"
+            echo "should_publish_artifacts=${{ steps.release_plz.outputs.releases_created }}" >> "$GITHUB_OUTPUT"
+          fi
+
   release-pr:
     name: Create or update release PR
     needs: release
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -80,7 +101,7 @@ jobs:
   verify-nix:
     name: Verify Nix packaging
     needs: release
-    if: needs.release.outputs.releases_created == 'true'
+    if: needs.release.outputs.should_build_artifacts == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -103,7 +124,7 @@ jobs:
   build-deb:
     name: Build Debian package
     needs: release
-    if: needs.release.outputs.releases_created == 'true'
+    if: needs.release.outputs.should_build_artifacts == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -137,30 +158,39 @@ jobs:
       - name: Build Debian package
         run: cargo deb --no-build
 
-      - name: Prepare Debian assets
-        id: prepare_assets
+      - name: Locate Debian package
+        id: deb_asset
         run: |
+          set -euxo pipefail
           DEB_PATH="$(echo target/debian/*.deb)"
           test -f "$DEB_PATH"
+          echo "deb_path=$DEB_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Generate Debian SBOM
+        id: deb_sbom
+        run: |
+          set -euxo pipefail
           cargo cyclonedx --format json --override-filename zfshealth-debian-package
           test -f zfshealth-debian-package.cdx.json
-          echo "deb_path=$DEB_PATH" >> "$GITHUB_OUTPUT"
           echo "sbom_path=zfshealth-debian-package.cdx.json" >> "$GITHUB_OUTPUT"
 
       - name: Attest Debian provenance
         id: attest_provenance
+        if: needs.release.outputs.should_publish_artifacts == 'true'
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
         with:
-          subject-path: ${{ steps.prepare_assets.outputs.deb_path }}
+          subject-path: ${{ steps.deb_asset.outputs.deb_path }}
 
       - name: Attest Debian SBOM
         id: attest_sbom
+        if: needs.release.outputs.should_publish_artifacts == 'true'
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
         with:
-          subject-path: ${{ steps.prepare_assets.outputs.deb_path }}
-          sbom-path: ${{ steps.prepare_assets.outputs.sbom_path }}
+          subject-path: ${{ steps.deb_asset.outputs.deb_path }}
+          sbom-path: ${{ steps.deb_sbom.outputs.sbom_path }}
 
       - name: Report attestation URLs
+        if: needs.release.outputs.should_publish_artifacts == 'true'
         run: |
           echo "Provenance attestation: ${{ steps.attest_provenance.outputs.attestation-url }}"
           echo "SBOM attestation: ${{ steps.attest_sbom.outputs.attestation-url }}"
@@ -170,14 +200,14 @@ jobs:
         with:
           name: debian-package
           path: |
-            ${{ steps.prepare_assets.outputs.deb_path }}
-            zfshealth-debian-package.cdx.json
+            ${{ steps.deb_asset.outputs.deb_path }}
+            ${{ steps.deb_sbom.outputs.sbom_path }}
           if-no-files-found: error
 
   build-static-binary:
     name: Build static release binary
     needs: release
-    if: needs.release.outputs.releases_created == 'true'
+    if: needs.release.outputs.should_build_artifacts == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -217,29 +247,38 @@ jobs:
       - name: Build static musl binary
         run: cargo zigbuild --release --target x86_64-unknown-linux-musl
 
-      - name: Prepare binary assets
-        id: prepare_assets
+      - name: Create static binary archive
+        id: static_asset
         run: |
+          set -euxo pipefail
           tar -C target/x86_64-unknown-linux-musl/release -czf zfshealth-x86_64-unknown-linux-musl.tar.gz zfshealth
+          echo "binary_path=zfshealth-x86_64-unknown-linux-musl.tar.gz" >> "$GITHUB_OUTPUT"
+
+      - name: Generate static binary SBOM
+        id: static_sbom
+        run: |
+          set -euxo pipefail
           cargo cyclonedx --format json --target x86_64-unknown-linux-musl --override-filename zfshealth-x86_64-unknown-linux-musl.cdx
           test -f zfshealth-x86_64-unknown-linux-musl.cdx.json
-          echo "binary_path=zfshealth-x86_64-unknown-linux-musl.tar.gz" >> "$GITHUB_OUTPUT"
           echo "sbom_path=zfshealth-x86_64-unknown-linux-musl.cdx.json" >> "$GITHUB_OUTPUT"
 
       - name: Attest binary provenance
         id: attest_provenance
+        if: needs.release.outputs.should_publish_artifacts == 'true'
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
         with:
-          subject-path: ${{ steps.prepare_assets.outputs.binary_path }}
+          subject-path: ${{ steps.static_asset.outputs.binary_path }}
 
       - name: Attest binary SBOM
         id: attest_sbom
+        if: needs.release.outputs.should_publish_artifacts == 'true'
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
         with:
-          subject-path: ${{ steps.prepare_assets.outputs.binary_path }}
-          sbom-path: ${{ steps.prepare_assets.outputs.sbom_path }}
+          subject-path: ${{ steps.static_asset.outputs.binary_path }}
+          sbom-path: ${{ steps.static_sbom.outputs.sbom_path }}
 
       - name: Report attestation URLs
+        if: needs.release.outputs.should_publish_artifacts == 'true'
         run: |
           echo "Provenance attestation: ${{ steps.attest_provenance.outputs.attestation-url }}"
           echo "SBOM attestation: ${{ steps.attest_sbom.outputs.attestation-url }}"
@@ -249,8 +288,8 @@ jobs:
         with:
           name: static-binary-x86_64-unknown-linux-musl
           path: |
-            ${{ steps.prepare_assets.outputs.binary_path }}
-            ${{ steps.prepare_assets.outputs.sbom_path }}
+            ${{ steps.static_asset.outputs.binary_path }}
+            ${{ steps.static_sbom.outputs.sbom_path }}
           if-no-files-found: error
 
   publish-deb:
@@ -259,7 +298,7 @@ jobs:
       - release
       - build-deb
       - verify-nix
-    if: needs.release.outputs.releases_created == 'true'
+    if: needs.release.outputs.should_publish_artifacts == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -285,7 +324,7 @@ jobs:
       - release
       - build-static-binary
       - verify-nix
-    if: needs.release.outputs.releases_created == 'true'
+    if: needs.release.outputs.should_publish_artifacts == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
