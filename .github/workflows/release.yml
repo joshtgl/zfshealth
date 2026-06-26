@@ -168,11 +168,13 @@ jobs:
 
       - name: Generate Debian SBOM
         id: deb_sbom
+        env:
+          SBOM_BASE_NAME: zfshealth-debian-package.cdx
         run: |
           set -euxo pipefail
-          cargo cyclonedx --format json --override-filename zfshealth-debian-package
-          test -f zfshealth-debian-package.cdx.json
-          echo "sbom_path=zfshealth-debian-package.cdx.json" >> "$GITHUB_OUTPUT"
+          cargo cyclonedx --format json --override-filename "$SBOM_BASE_NAME"
+          test -f "$SBOM_BASE_NAME.json"
+          echo "sbom_path=$SBOM_BASE_NAME.json" >> "$GITHUB_OUTPUT"
 
       - name: Attest Debian provenance
         id: attest_provenance
