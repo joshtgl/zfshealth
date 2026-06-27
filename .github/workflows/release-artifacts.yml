@@ -1,0 +1,217 @@
+name: Release artifacts
+
+on:
+  workflow_call:
+    inputs:
+      repository:
+        description: "Repository to check out"
+        required: true
+        type: string
+      ref:
+        description: "Commit, branch, or tag to check out"
+        required: true
+        type: string
+      publish_artifacts:
+        description: "Whether to create provenance and SBOM attestations"
+        required: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  verify-nix:
+    name: Verify Nix packaging
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3 # v31.10.6
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Verify flake outputs
+        run: nix flake check
+
+  build-deb:
+    name: Build Debian package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      attestations: write
+      artifact-metadata: write
+      id-token: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537 # master
+        with:
+          toolchain: stable
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
+      - name: Install cargo-deb
+        run: cargo install cargo-deb --version 3.0.0 --locked
+
+      - name: Install cargo-cyclonedx
+        run: cargo install cargo-cyclonedx --version 0.5.9 --locked
+
+      - name: Build release binary
+        run: cargo build --release --locked
+
+      - name: Build Debian package
+        run: cargo deb --no-build
+
+      - name: Locate Debian package
+        id: deb_asset
+        run: |
+          set -euxo pipefail
+          DEB_PATH="$(echo target/debian/*.deb)"
+          test -f "$DEB_PATH"
+          echo "deb_path=$DEB_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Generate Debian SBOM
+        id: deb_sbom
+        env:
+          SBOM_BASE_NAME: zfshealth-debian-package.cdx
+        run: |
+          set -euxo pipefail
+          cargo cyclonedx --format json --override-filename "$SBOM_BASE_NAME"
+          test -f "$SBOM_BASE_NAME.json"
+          echo "sbom_path=$SBOM_BASE_NAME.json" >> "$GITHUB_OUTPUT"
+
+      - name: Attest Debian provenance
+        id: attest_provenance
+        if: inputs.publish_artifacts
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        with:
+          subject-path: ${{ steps.deb_asset.outputs.deb_path }}
+
+      - name: Attest Debian SBOM
+        id: attest_sbom
+        if: inputs.publish_artifacts
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        with:
+          subject-path: ${{ steps.deb_asset.outputs.deb_path }}
+          sbom-path: ${{ steps.deb_sbom.outputs.sbom_path }}
+
+      - name: Report attestation URLs
+        if: inputs.publish_artifacts
+        run: |
+          echo "Provenance attestation: ${{ steps.attest_provenance.outputs.attestation-url }}"
+          echo "SBOM attestation: ${{ steps.attest_sbom.outputs.attestation-url }}"
+
+      - name: Upload Debian package artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: debian-package
+          path: |
+            ${{ steps.deb_asset.outputs.deb_path }}
+            ${{ steps.deb_sbom.outputs.sbom_path }}
+          if-no-files-found: error
+
+  build-static-binary:
+    name: Build static release binary
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      attestations: write
+      artifact-metadata: write
+      id-token: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537 # master
+        with:
+          toolchain: stable
+          targets: x86_64-unknown-linux-musl
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+        with:
+          version: 0.16.0
+
+      - name: Verify Zig installation
+        run: zig version
+
+      - name: Install cargo-zigbuild
+        run: cargo install cargo-zigbuild --version 0.23.0 --locked
+
+      - name: Install cargo-cyclonedx
+        run: cargo install cargo-cyclonedx --version 0.5.9 --locked
+
+      - name: Build static musl binary
+        run: cargo zigbuild --release --target x86_64-unknown-linux-musl
+
+      - name: Create static binary archive
+        id: static_asset
+        run: |
+          set -euxo pipefail
+          tar -C target/x86_64-unknown-linux-musl/release -czf zfshealth-x86_64-unknown-linux-musl.tar.gz zfshealth
+          echo "binary_path=zfshealth-x86_64-unknown-linux-musl.tar.gz" >> "$GITHUB_OUTPUT"
+
+      - name: Generate static binary SBOM
+        id: static_sbom
+        run: |
+          set -euxo pipefail
+          cargo cyclonedx --format json --target x86_64-unknown-linux-musl --override-filename zfshealth-x86_64-unknown-linux-musl.cdx
+          test -f zfshealth-x86_64-unknown-linux-musl.cdx.json
+          echo "sbom_path=zfshealth-x86_64-unknown-linux-musl.cdx.json" >> "$GITHUB_OUTPUT"
+
+      - name: Attest binary provenance
+        id: attest_provenance
+        if: inputs.publish_artifacts
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        with:
+          subject-path: ${{ steps.static_asset.outputs.binary_path }}
+
+      - name: Attest binary SBOM
+        id: attest_sbom
+        if: inputs.publish_artifacts
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        with:
+          subject-path: ${{ steps.static_asset.outputs.binary_path }}
+          sbom-path: ${{ steps.static_sbom.outputs.sbom_path }}
+
+      - name: Report attestation URLs
+        if: inputs.publish_artifacts
+        run: |
+          echo "Provenance attestation: ${{ steps.attest_provenance.outputs.attestation-url }}"
+          echo "SBOM attestation: ${{ steps.attest_sbom.outputs.attestation-url }}"
+
+      - name: Upload static binary artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: static-binary-x86_64-unknown-linux-musl
+          path: |
+            ${{ steps.static_asset.outputs.binary_path }}
+            ${{ steps.static_sbom.outputs.sbom_path }}
+          if-no-files-found: error
