@@ -7,6 +7,7 @@
     "dependencies"
   ],
   "rangeStrategy": "bump",
+  "dependencyDashboard": true,
   "prConcurrentLimit": 5,
   "customManagers": [
     {
@@ -78,6 +79,18 @@
         "github-actions"
       ],
       "groupName": "github actions"
+    },
+    {
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "pin",
+        "digest"
+      ],
+      "automerge": true,
+      "minimumReleaseAge": "3 days",
+      "prCreation": "not-pending",
+      "internalChecksFilter": "strict"
     }
   ]
 }
