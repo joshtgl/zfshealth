@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.3](https://github.com/joshtgl/zfshealth/compare/v0.1.2...v0.1.3) - 2026-06-27
+
+### Other
+
+- *(ci)* Use staging job step
+
 ## [0.1.2](https://github.com/joshtgl/zfshealth/compare/v0.1.1...v0.1.2) - 2026-06-27
 
 ### Fixed
