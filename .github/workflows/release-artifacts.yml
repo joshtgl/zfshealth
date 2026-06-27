@@ -101,14 +101,14 @@ jobs:
       - name: Attest Debian provenance
         id: attest_provenance
         if: inputs.publish_artifacts
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
           subject-path: ${{ steps.deb_asset.outputs.deb_path }}
 
       - name: Attest Debian SBOM
         id: attest_sbom
         if: inputs.publish_artifacts
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
           subject-path: ${{ steps.deb_asset.outputs.deb_path }}
           sbom-path: ${{ steps.deb_sbom.outputs.sbom_path }}
@@ -189,14 +189,14 @@ jobs:
       - name: Attest binary provenance
         id: attest_provenance
         if: inputs.publish_artifacts
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
           subject-path: ${{ steps.static_asset.outputs.binary_path }}
 
       - name: Attest binary SBOM
         id: attest_sbom
         if: inputs.publish_artifacts
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
           subject-path: ${{ steps.static_asset.outputs.binary_path }}
           sbom-path: ${{ steps.static_sbom.outputs.sbom_path }}
