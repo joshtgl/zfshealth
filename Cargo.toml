@@ -14,7 +14,7 @@ chrono-tz = "0.10.4"
 clap = { version = "4.6.1", features = ["derive"] }
 config = { version = "0.15.25", default-features = false, features = ["toml"] }
 etcetera = "0.11.0"
-jiff = "0.2.29"
+jiff = "0.2.31"
 lettre = { version = "0.11.22", default-features = false, features = ["smtp-transport", "builder", "tokio1", "tokio1-rustls", "rustls-native-certs", "aws-lc-rs"] }
 secrecy = { version = "0.10.3", features = ["serde"] }
 serde = { version = "1.0.228", features = ["derive"] }
