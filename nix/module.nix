@@ -42,6 +42,13 @@ in
       description = "Runtime path to the SMTP password file.";
     };
 
+    caCertificateFile = lib.mkOption {
+      type = lib.types.oneOf [ lib.types.path lib.types.str ];
+      default = "/etc/ssl/certs/ca-certificates.crt";
+      example = "/etc/ssl/certs/ca-certificates.crt";
+      description = "Certificate authority bundle used to validate SMTP TLS certificates.";
+    };
+
     environment = lib.mkOption {
       type = lib.types.attrsOf lib.types.str;
       default = { };
@@ -82,7 +89,7 @@ in
         config.boot.zfs.package
       ];
       environment = cfg.environment // {
-        SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+        SSL_CERT_FILE = toString cfg.caCertificateFile;
       };
       serviceConfig =
         {

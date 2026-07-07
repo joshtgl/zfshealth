@@ -85,13 +85,14 @@
               (pkg: lib.hasInfix "/zfs" (toString pkg) || lib.hasInfix "-zfs" (toString pkg))
               eval.config.systemd.services.zfshealth.path;
           envValue = eval.config.systemd.services.zfshealth.environment.ZFSHEALTH_STATUS__SCHEDULE__CRON;
+          caCertificateFile = eval.config.systemd.services.zfshealth.environment.SSL_CERT_FILE;
           envFile = eval.config.systemd.services.zfshealth.serviceConfig.EnvironmentFile or "";
         in
         {
           zfshealth = zfshealth;
           nixos-module = pkgs.runCommand "zfshealth-module-check"
             {
-              inherit renderedConfig execStart envValue envFile;
+              inherit renderedConfig execStart envValue caCertificateFile envFile;
               hasZfsPath = if hasZfsPath then "1" else "0";
             }
             ''
@@ -121,6 +122,7 @@
               [ "$hasZfsPath" = "1" ]
 
               [ "$envValue" = "*/30 * * * *" ]
+              [ "$caCertificateFile" = "/etc/ssl/certs/ca-certificates.crt" ]
               [ "$envFile" = "" ]
 
               touch "$out"

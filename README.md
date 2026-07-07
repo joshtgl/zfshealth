@@ -97,6 +97,8 @@ Minimal NixOS example:
 
 `emailPasswordFile` is the preferred way to provide the SMTP password in Nix so the cleartext secret stays out of the Nix store.
 
+SMTP TLS certificates are validated with `caCertificateFile`, which defaults to the system trust bundle at `/etc/ssl/certs/ca-certificates.crt`. Set it to a custom PEM bundle if your SMTP server uses a private CA.
+
 Example with `sops-nix`:
 
 ```nix
