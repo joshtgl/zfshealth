@@ -221,6 +221,7 @@ pub async fn load_config_from_path(config_path: &PathBuf) -> Result<Config, AppE
 
 fn load_raw_config(config_path: Option<&PathBuf>) -> Result<RawConfig, AppError> {
     let mut builder = LayeredConfig::builder();
+    let source_description = config_source_description(config_path);
 
     if let Some(config_path) = config_path {
         builder = builder.add_source(File::from(config_path.as_path()));
@@ -233,7 +234,106 @@ fn load_raw_config(config_path: Option<&PathBuf>) -> Result<RawConfig, AppError>
             .try_parsing(true),
     );
 
-    Ok(builder.build()?.try_deserialize()?)
+    let config = builder.build().map_err(|err| {
+        AppError::ConfigFile(format_config_error(
+            "Could not load configuration",
+            &source_description,
+            err,
+        ))
+    })?;
+
+    config.try_deserialize().map_err(|err| {
+        AppError::ConfigFile(format_config_error(
+            "Could not parse configuration values",
+            &source_description,
+            err,
+        ))
+    })
+}
+
+fn config_source_description(config_path: Option<&PathBuf>) -> String {
+    match config_path {
+        Some(config_path) => format!(
+            "{} plus ZFSHEALTH_* environment overrides",
+            config_path.display()
+        ),
+        None => "ZFSHEALTH_* environment variables".to_string(),
+    }
+}
+
+fn format_config_error(
+    action: &str,
+    source_description: &str,
+    err: ::config::ConfigError,
+) -> String {
+    let detail = config_error_detail(&err);
+    let mut message = format!("{action} from {source_description}: {err}");
+
+    if let Some(detail) = detail {
+        message.push_str(&format!(". Detail: {detail}"));
+    }
+
+    message
+}
+
+fn config_error_detail(err: &::config::ConfigError) -> Option<String> {
+    match err {
+        ::config::ConfigError::FileParse { uri, cause } => Some(match uri {
+            Some(uri) => format!("TOML parser failed while reading {uri}: {cause}"),
+            None => format!("TOML parser failed: {cause}"),
+        }),
+        ::config::ConfigError::NotFound(key) => {
+            Some(format!("missing required configuration key `{key}`"))
+        }
+        ::config::ConfigError::Type {
+            origin,
+            unexpected,
+            expected,
+            key,
+        } => Some(format_type_error(
+            origin.as_deref(),
+            key.as_deref(),
+            &unexpected.to_string(),
+            expected,
+        )),
+        ::config::ConfigError::At { error, origin, key } => {
+            let location = format_config_location(origin.as_deref(), key.as_deref());
+            match config_error_detail(error) {
+                Some(detail) => Some(format!("{location}: {detail}")),
+                None => Some(format!("{location}: {error}")),
+            }
+        }
+        ::config::ConfigError::PathParse { cause } => Some(format!(
+            "configuration key path could not be parsed: {cause}"
+        )),
+        ::config::ConfigError::Message(message) => Some(message.clone()),
+        ::config::ConfigError::Foreign(cause) => Some(cause.to_string()),
+        ::config::ConfigError::Frozen => None,
+        _ => None,
+    }
+}
+
+fn format_type_error(
+    origin: Option<&str>,
+    key: Option<&str>,
+    unexpected: &str,
+    expected: &'static str,
+) -> String {
+    format!(
+        "{} has {}, but expected {}",
+        format_config_location(origin, key),
+        unexpected,
+        expected
+    )
+}
+
+fn format_config_location(origin: Option<&str>, key: Option<&str>) -> String {
+    match (origin, key) {
+        (Some(origin), Some(key)) => format!("`{key}` in {origin}"),
+        (None, Some(key)) => format!("`{key}`"),
+        (Some(origin), None) => format!("configuration in {origin}"),
+        (None, None) => "configuration".to_string(),
+    }
 }
 
 #[cfg(test)]
@@ -323,6 +423,56 @@ mod tests {
             err.to_string()
                 .contains("status.schedule.repeat_after must be a valid Jiff duration")
         );
+    }
+
+    #[tokio::test]
+    async fn reports_config_file_parse_context() {
+        let _guard = env_guard();
+        clear_zfshealth_env();
+        let path = write_temp_file(
+            "malformed-toml",
+            r#"
+            [scrub.schedule
+            cron = "15 3 * * 3"
+            "#,
+        );
+
+        let err = load_config_from_path(&path)
+            .await
+            .expect_err("config should fail");
+        let message = err.to_string();
+
+        assert!(message.contains("Could not load configuration"));
+        assert!(message.contains(&path.display().to_string()));
+        assert!(message.contains("ZFSHEALTH_* environment overrides"));
+        assert!(message.contains("Detail: TOML parser failed"));
+    }
+
+    #[tokio::test]
+    async fn reports_config_value_parse_context() {
+        let _guard = env_guard();
+        clear_zfshealth_env();
+        let path = write_temp_file(
+            "wrong-type",
+            r#"
+            [email]
+            from = "zfshealth@example.com"
+            to = "admin@example.com"
+            host = "smtp.example.com"
+            port = "not-a-port"
+            username = "smtp-user"
+            password = "smtp-password"
+            "#,
+        );
+
+        let err = load_config_from_path(&path)
+            .await
+            .expect_err("config should fail");
+        let message = err.to_string();
+
+        assert!(message.contains("Could not parse configuration values"));
+        assert!(message.contains("email.port"));
+        assert!(message.contains("not-a-port"));
     }
 
     #[test]
