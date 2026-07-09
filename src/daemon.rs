@@ -157,7 +157,7 @@ fn build_job(
     schedule: &ScheduleConfig,
     state: Arc<AppState>,
 ) -> Result<Job, AppError> {
-    let cron = schedule.cron.trim();
+    let cron = normalize_cron_schedule(kind, &schedule.cron)?;
     if cron.is_empty() {
         return Err(AppError::ConfigFile(format!(
             "{}.schedule.cron must not be empty",
@@ -165,7 +165,6 @@ fn build_job(
         )));
     }
 
-    let cron = schedule.cron.clone();
     let timezone = schedule.timezone.trim().to_string();
 
     if timezone.eq_ignore_ascii_case("local") {
@@ -196,6 +195,20 @@ fn build_job(
             })
         })
         .map_err(|err| AppError::ConfigFile(format!("Invalid cron schedule: {}", err)))
+    }
+}
+
+fn normalize_cron_schedule(kind: JobKind, cron: &str) -> Result<String, AppError> {
+    let fields = cron.split_whitespace().collect::<Vec<_>>();
+    match fields.len() {
+        0 => Ok(String::new()),
+        5 => Ok(format!("0 {}", fields.join(" "))),
+        6 => Ok(fields.join(" ")),
+        field_count => Err(AppError::ConfigFile(format!(
+            "{}.schedule.cron must use 5 fields (minute hour day-of-month month day-of-week) or 6 fields with seconds; got {} fields",
+            kind.label(),
+            field_count
+        ))),
     }
 }
 
@@ -280,7 +293,7 @@ impl JobKind {
 
 #[cfg(test)]
 mod tests {
-    use super::{AppState, JobKind, build_job};
+    use super::{AppState, JobKind, build_job, normalize_cron_schedule};
     use crate::config::{Config, ScheduleConfig};
     use crate::status::SharedStatusNotificationState;
     use std::sync::Arc;
@@ -294,6 +307,67 @@ mod tests {
             status_run_in_progress: Arc::new(AtomicBool::new(false)),
             status_notification_state: Arc::new(SharedStatusNotificationState::new()),
         })
+    }
+
+    #[test]
+    fn accepts_documented_five_field_scrub_cron() {
+        let schedule = ScheduleConfig {
+            cron: "15 3 * * 3".to_string(),
+            timezone: "local".to_string(),
+            repeat_after: None,
+        };
+
+        build_job(JobKind::Scrub, &schedule, state())
+            .expect("documented scrub cron should build a job");
+    }
+
+    #[test]
+    fn accepts_documented_five_field_status_cron() {
+        let schedule = ScheduleConfig {
+            cron: "*/15 * * * *".to_string(),
+            timezone: "local".to_string(),
+            repeat_after: None,
+        };
+
+        build_job(JobKind::Status, &schedule, state())
+            .expect("documented status cron should build a job");
+    }
+
+    #[test]
+    fn accepts_six_field_cron_with_seconds() {
+        let schedule = ScheduleConfig {
+            cron: "30 */15 * * * *".to_string(),
+            timezone: "local".to_string(),
+            repeat_after: None,
+        };
+
+        build_job(JobKind::Status, &schedule, state()).expect("six-field cron should build a job");
+    }
+
+    #[test]
+    fn normalizes_five_field_cron_to_zero_seconds() {
+        let cron =
+            normalize_cron_schedule(JobKind::Scrub, "15 3 * * 3").expect("cron should normalize");
+
+        assert_eq!(cron, "0 15 3 * * 3");
+    }
+
+    #[test]
+    fn rejects_wrong_field_count_cron() {
+        let schedule = ScheduleConfig {
+            cron: "15 3 * *".to_string(),
+            timezone: "local".to_string(),
+            repeat_after: None,
+        };
+
+        let err = match build_job(JobKind::Scrub, &schedule, state()) {
+            Ok(_) => panic!("cron with wrong field count should be rejected"),
+            Err(err) => err,
+        };
+        assert!(
+            err.to_string()
+                .contains("scrub.schedule.cron must use 5 fields")
+        );
     }
 
     #[test]
