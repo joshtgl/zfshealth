@@ -2,6 +2,7 @@ use std::time::{Duration, Instant};
 
 use tokio::process::Command;
 use tokio::sync::Mutex;
+use tracing::{debug, info, warn};
 
 use crate::config::EmailConfig;
 use crate::email::send_mail;
@@ -61,15 +62,21 @@ enum NotificationDecision {
     Send,
 }
 
+#[derive(Debug, Clone, Copy)]
+enum HealthyLogLevel {
+    Info,
+    Debug,
+}
+
 pub async fn execute_status(email_config: Option<EmailConfig>) -> Result<(), AppError> {
     let report = read_status_report().await?;
-    log_status(&report);
+    log_status(&report, HealthyLogLevel::Info);
 
     if !report.is_healthy
         && let Some(ec) = email_config
     {
         send_mail(&ec, "ZFS Pool Unhealthy", &report.output).await?;
-        println!("Email sent successfully");
+        info!("Email sent successfully");
     }
 
     Ok(())
@@ -81,7 +88,7 @@ pub async fn execute_status_with_suppression(
     state: &SharedStatusNotificationState,
 ) -> Result<(), AppError> {
     let report = read_status_report().await?;
-    log_status(&report);
+    log_status(&report, HealthyLogLevel::Debug);
 
     let should_send = {
         let mut guard = state.inner.lock().await;
@@ -96,7 +103,7 @@ pub async fn execute_status_with_suppression(
             let mut guard = state.inner.lock().await;
             record_notification_sent(&report, &mut guard);
         }
-        println!("Email sent successfully");
+        info!("Email sent successfully");
     }
 
     Ok(())
@@ -121,11 +128,14 @@ pub async fn read_status_report() -> Result<StatusReport, AppError> {
     })
 }
 
-fn log_status(report: &StatusReport) {
+fn log_status(report: &StatusReport, healthy_log_level: HealthyLogLevel) {
     if report.is_healthy {
-        println!("All pools are healthy");
+        match healthy_log_level {
+            HealthyLogLevel::Info => info!("All pools are healthy"),
+            HealthyLogLevel::Debug => debug!("All pools are healthy"),
+        }
     } else {
-        println!("Unhealthy pools detected");
+        warn!("Unhealthy pools detected");
     }
 }
 

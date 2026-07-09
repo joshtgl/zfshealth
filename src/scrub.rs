@@ -1,5 +1,6 @@
 use tokio::process::Command;
 use tokio::time::{Duration, sleep};
+use tracing::{info, warn};
 
 use crate::config::EmailConfig;
 use crate::email::send_mail;
@@ -32,21 +33,21 @@ pub async fn execute_scrub(email_config: Option<EmailConfig>) -> Result<(), AppE
     {
         let error_msg = format!("Error occurred: {}", e);
         send_mail(&ec, "ZFS Scrub Error", &error_msg).await?;
-        println!("Error email sent");
+        info!("Error email sent");
     }
 
     result
 }
 
 async fn run_scrub(email_config: Option<&EmailConfig>) -> Result<(), AppError> {
-    println!(
+    info!(
         "Start time: {}",
         jiff::Zoned::now().strftime("%Y-%m-%d %H:%M:%S %Z")
     );
 
     let zpools = get_zpool_list(&["name"]).await?;
     for props in &zpools {
-        println!("Starting scrub for pool: {}", props.name);
+        info!("Starting scrub for pool: {}", props.name);
         start_scrub(&props.name).await?;
     }
 
@@ -54,17 +55,17 @@ async fn run_scrub(email_config: Option<&EmailConfig>) -> Result<(), AppError> {
         sleep(Duration::from_secs(5)).await;
     }
 
-    println!("All scrubs complete");
+    info!("All scrubs complete");
 
     let report = read_status_report().await?;
     if report.is_healthy {
-        println!("All pools are healthy");
+        info!("All pools are healthy");
     } else {
-        println!("Unhealthy pools detected");
+        warn!("Unhealthy pools detected");
 
         if let Some(ec) = email_config {
             send_mail(ec, "ZFS Pool Unhealthy", &report.output).await?;
-            println!("Email sent successfully");
+            info!("Email sent successfully");
         }
     }
 

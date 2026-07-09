@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::RwLock;
 use tokio_cron_scheduler::{Job, JobScheduler};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::config::{Config, ScheduleConfig, load_config_from_path};
@@ -67,7 +68,7 @@ pub async fn run_daemon(config_path: PathBuf) -> Result<(), AppError> {
     let mut active_jobs = install_jobs(&scheduler, &initial_config, state.clone()).await?;
     log_next_runs(&scheduler, &active_jobs).await;
     scheduler.start().await?;
-    println!("zfshealth daemon started");
+    info!("zfshealth daemon started");
 
     let mut hup = signal(SignalKind::hangup())?;
     let mut term = signal(SignalKind::terminate())?;
@@ -80,19 +81,19 @@ pub async fn run_daemon(config_path: PathBuf) -> Result<(), AppError> {
                     Ok(new_jobs) => {
                         active_jobs = new_jobs;
                         log_next_runs(&scheduler, &active_jobs).await;
-                        println!("Configuration reloaded from {}", config_path.display());
+                        info!("Configuration reloaded from {}", config_path.display());
                     }
                     Err(err) => {
-                        eprintln!("Configuration reload failed: {}", err);
+                        error!("Configuration reload failed: {}", err);
                     }
                 }
             }
             _ = term.recv() => {
-                println!("Received SIGTERM, shutting down");
+                info!("Received SIGTERM, shutting down");
                 break;
             }
             _ = interrupt.recv() => {
-                println!("Received SIGINT, shutting down");
+                info!("Received SIGINT, shutting down");
                 break;
             }
         }
@@ -172,7 +173,7 @@ fn build_job(
             let state = state.clone();
             Box::pin(async move {
                 if let Err(err) = run_scheduled_job(kind, state).await {
-                    eprintln!("Scheduled {} failed: {}", kind.label(), err);
+                    error!("Scheduled {} failed: {}", kind.label(), err);
                 }
             })
         })
@@ -190,7 +191,7 @@ fn build_job(
             let state = state.clone();
             Box::pin(async move {
                 if let Err(err) = run_scheduled_job(kind, state).await {
-                    eprintln!("Scheduled {} failed: {}", kind.label(), err);
+                    error!("Scheduled {} failed: {}", kind.label(), err);
                 }
             })
         })
@@ -224,9 +225,9 @@ async fn log_next_runs(scheduler: &JobScheduler, active_jobs: &ActiveJobs) {
 async fn log_next_run(scheduler: &JobScheduler, kind: JobKind, job_id: Uuid) {
     let mut scheduler = scheduler.clone();
     match scheduler.next_tick_for_job(job_id).await {
-        Ok(Some(next)) => println!("Next {} run scheduled for {}", kind.label(), next),
-        Ok(None) => println!("No next {} run scheduled", kind.label()),
-        Err(err) => eprintln!("Failed to compute next {} run: {}", kind.label(), err),
+        Ok(Some(next)) => info!("Next {} run scheduled for {}", kind.label(), next),
+        Ok(None) => warn!("No next {} run scheduled", kind.label()),
+        Err(err) => warn!("Failed to compute next {} run: {}", kind.label(), err),
     }
 }
 
@@ -239,12 +240,12 @@ async fn run_scheduled_job(kind: JobKind, state: Arc<AppState>) -> Result<(), Ap
 
 async fn run_scheduled_scrub(state: Arc<AppState>) -> Result<(), AppError> {
     let Some(_guard) = RunGuard::try_acquire(state.scrub_run_in_progress.clone()) else {
-        println!("Skipping scheduled scrub because a prior run is still in progress");
+        info!("Skipping scheduled scrub because a prior run is still in progress");
         return Ok(());
     };
 
     if scrub_in_progress().await? {
-        println!("Skipping scheduled scrub because a scrub is already active");
+        info!("Skipping scheduled scrub because a scrub is already active");
         return Ok(());
     }
 
@@ -258,7 +259,7 @@ async fn run_scheduled_scrub(state: Arc<AppState>) -> Result<(), AppError> {
 
 async fn run_scheduled_status(state: Arc<AppState>) -> Result<(), AppError> {
     let Some(_guard) = RunGuard::try_acquire(state.status_run_in_progress.clone()) else {
-        println!("Skipping scheduled status because a prior run is still in progress");
+        info!("Skipping scheduled status because a prior run is still in progress");
         return Ok(());
     };
 

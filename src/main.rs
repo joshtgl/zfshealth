@@ -7,6 +7,8 @@ mod status;
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
+use tracing::error;
+use tracing_subscriber::EnvFilter;
 
 use crate::config::{load_config, resolve_config_path};
 use crate::daemon::run_daemon;
@@ -45,10 +47,23 @@ enum RunMode {
 
 #[tokio::main]
 async fn main() {
+    init_tracing();
+
     if let Err(e) = run().await {
-        eprintln!("Error: {}", e);
+        error!("{}", e);
         std::process::exit(1);
     }
+}
+
+fn init_tracing() {
+    let env_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("zfshealth=info"));
+
+    tracing_subscriber::fmt()
+        .with_env_filter(env_filter)
+        .with_target(false)
+        .without_time()
+        .init();
 }
 
 async fn run() -> Result<(), AppError> {
