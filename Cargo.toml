@@ -11,16 +11,16 @@ authors = [
 [dependencies]
 chrono = "0.4.45"
 chrono-tz = "0.10.4"
-clap = { version = "4.6.4", features = ["derive"] }
+clap = { version = "4.6.6", features = ["derive"] }
 config = { version = "0.15.25", default-features = false, features = ["toml"] }
 etcetera = "0.11.0"
-jiff = "0.2.34"
-lettre = { version = "0.11.22", default-features = false, features = ["smtp-transport", "builder", "tokio1", "tokio1-rustls", "rustls-native-certs", "aws-lc-rs"] }
+jiff = "0.2.35"
+lettre = { version = "0.11.23", default-features = false, features = ["smtp-transport", "builder", "tokio1", "tokio1-rustls", "rustls-native-certs", "aws-lc-rs"] }
 secrecy = { version = "0.10.3", features = ["serde"] }
 serde = { version = "1.0.229", features = ["derive"] }
 tokio = { version = "1.53.1", features = ["macros", "process", "rt-multi-thread", "signal", "sync", "time", "fs"] }
 tokio-cron-scheduler = "0.15.1"
-toml = "1.1.3"
+toml = "1.1.4"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 uuid = "1.24.0"
