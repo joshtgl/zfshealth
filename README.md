@@ -66,6 +66,18 @@ nix flake check
 
 The flake also exposes a NixOS module as `nixosModules.default`.
 
+Add the flake as an input and have it follow your own nixpkgs, so zfshealth is built with the same package set as the rest of your system:
+
+```nix
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    zfshealth.url = "github:joshtgl/zfshealth";
+    zfshealth.inputs.nixpkgs.follows = "nixpkgs";
+  };
+}
+```
+
 Minimal NixOS example:
 
 ```nix

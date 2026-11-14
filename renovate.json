@@ -9,6 +9,15 @@
   "rangeStrategy": "bump",
   "dependencyDashboard": true,
   "prConcurrentLimit": 5,
+  "nix": {
+    "enabled": true
+  },
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": [
+      "before 6am on monday"
+    ]
+  },
   "customManagers": [
     {
       "customType": "regex",
@@ -65,6 +74,17 @@
       "depNameTemplate": "zig",
       "packageNameTemplate": "ziglang/zig",
       "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^\\.github\\/workflows\\/ci\\.yml$/"
+      ],
+      "matchStrings": [
+        "cargo install cargo-deny --version (?<currentValue>\\S+) --locked"
+      ],
+      "depNameTemplate": "cargo-deny",
+      "datasourceTemplate": "crate"
     }
   ],
   "packageRules": [
@@ -72,7 +92,30 @@
       "matchManagers": [
         "cargo"
       ],
-      "groupName": "rust dependencies"
+      "groupName": "rust dependencies",
+      "matchUpdateTypes": [
+        "!lockFileMaintenance"
+      ]
+    },
+    {
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchUpdateTypes": [
+        "lockFileMaintenance"
+      ],
+      "branchTopic": "cargo-lock-maintenance",
+      "commitMessageTopic": "Cargo.lock"
+    },
+    {
+      "matchManagers": [
+        "nix"
+      ],
+      "matchUpdateTypes": [
+        "lockFileMaintenance"
+      ],
+      "branchTopic": "flake-lock-maintenance",
+      "commitMessageTopic": "flake.lock"
     },
     {
       "matchManagers": [
