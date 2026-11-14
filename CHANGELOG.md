@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.1.4](https://github.com/joshtgl/zfshealth/compare/v0.1.3...v0.1.4) - 2026-11-14
+
+### Added
+
+- support 5 entry cron
+
+### Fixed
+
+- *(deps)* update rustls and rustls-webpki for security advisories
+- *(deps)* update rust dependencies ([#27](https://github.com/joshtgl/zfshealth/pull/27))
+- *(deps)* update rust dependencies ([#26](https://github.com/joshtgl/zfshealth/pull/26))
+- *(deps)* update rust crate uuid to 1.26.0 ([#23](https://github.com/joshtgl/zfshealth/pull/23))
+- *(deps)* update rust dependencies ([#21](https://github.com/joshtgl/zfshealth/pull/21))
+- *(deps)* update rust dependencies ([#20](https://github.com/joshtgl/zfshealth/pull/20))
+- *(deps)* update rust dependencies ([#19](https://github.com/joshtgl/zfshealth/pull/19))
+- use log printing
+- verbose config error logs
+- configurable ca certificate path for nix module
+- *(deps)* update rust crate jiff to 0.2.31 ([#17](https://github.com/joshtgl/zfshealth/pull/17))
+
+### Other
+
+- Merge pull request #31 from joshtgl/chore/lock-file-maintenance
+- enable lock file maintenance and advisory checks
+- *(deps)* update github actions ([#28](https://github.com/joshtgl/zfshealth/pull/28))
+- *(deps)* update release-plz/action action to v0.5.139 ([#25](https://github.com/joshtgl/zfshealth/pull/25))
+- *(deps)* update release-plz/action action to v0.5.134 ([#24](https://github.com/joshtgl/zfshealth/pull/24))
+- *(deps)* update github actions ([#22](https://github.com/joshtgl/zfshealth/pull/22))
+
 ## [0.1.3](https://github.com/joshtgl/zfshealth/compare/v0.1.2...v0.1.3) - 2026-06-27
 
 ### Other
